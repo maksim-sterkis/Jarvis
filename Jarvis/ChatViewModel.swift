@@ -128,6 +128,11 @@ final class ChatViewModel: ObservableObject {
     @Published var loadedModelId: String? = nil
     @Published var errorMessage: String? = nil
 
+    // Model Activation & Progress
+    @Published var isModelLoading: Bool = false
+    @Published var modelLoadProgress: Double = 0.0
+    @Published var modelLoadingStatus: String = ""
+
     // Thinking / Reasoning Configuration
     @Published var isThinkingEnabled: Bool = true
     @Published var thinkingBudget: Double = 1536
@@ -142,12 +147,27 @@ final class ChatViewModel: ObservableObject {
     private var checkTimer: AnyCancellable?
     private var activeGenerationTask: Task<Void, Never>?
 
+    static weak var shared: ChatViewModel?
+
+    static func stopAllTimers() {
+        shared?.checkTimer?.cancel()
+        shared?.checkTimer = nil
+        shared?.stopGenerating()
+    }
+
     init() {
+        ChatViewModel.shared = self
         // Load past conversations from disk, then open a fresh new chat
         let saved = ConversationStorageService.shared.loadAllConversations()
         self.conversations = saved
         startNewChat()
-        checkConnection()
+        // Load cached disk models immediately so UI has models with 0ms latency and 0 CLI calls
+        self.availableModels = LMStudioService.shared.scanDiskModelsWithoutCLI()
+        if let first = self.availableModels.first, self.selectedModel.isEmpty {
+            self.selectedModel = first.id
+        }
+
+        checkConnectionAndAutoStart()
 
         // Periodic heartbeat check every 15s
         checkTimer = Timer.publish(every: 15, on: .main, in: .common)
@@ -248,25 +268,155 @@ final class ChatViewModel: ObservableObject {
         isThinkingEnabled = true
     }
 
-    func checkConnection() {
+    /// Checks if LM Studio is already running at startup.
+    /// If running: connects to it and sets `didJarvisLaunchServer = false` (user launched it).
+    /// If NOT running: sets `didJarvisLaunchServer = false`, stays offline, and NEVER runs CLI commands unless autoStartServerOnLaunch is true.
+    func checkConnectionAndAutoStart() {
         Task {
-            do {
-                let models = try await LMStudioClient.shared.fetchModels()
-                self.availableModels = models
-                self.isConnected = true
-                self.errorMessage = nil
-
-                // Auto-detect and auto-select the loaded model
-                if let loaded = models.first(where: { $0.isLoaded }) {
-                    self.loadedModelId = loaded.id
-                    self.selectedModel = loaded.id
-                } else if !models.contains(where: { $0.id == self.selectedModel }), let first = models.first {
-                    self.selectedModel = first.id
+            let isRunning = await LMStudioService.shared.isServerRunning()
+            if isRunning {
+                // LM Studio was already launched by the user before opening Jarvis!
+                // Jarvis connects to the existing instance without claiming ownership.
+                await MainActor.run {
+                    LMStudioService.shared.didJarvisLaunchServer = false
                 }
-            } catch {
-                self.isConnected = false
+                await checkConnectionAsync()
+            } else {
+                await MainActor.run {
+                    LMStudioService.shared.didJarvisLaunchServer = false
+                    self.isConnected = false
+                    self.loadedModelId = nil
+                }
+
+                let autoStart = UserDefaults.standard.bool(forKey: "autoStartServerOnLaunch")
+                if autoStart {
+                    let targetModel = self.selectedModel.isEmpty ? (self.availableModels.first?.id ?? "google/gemma-4-e2b") : self.selectedModel
+                    self.activateModel(modelId: targetModel)
+                }
             }
         }
+    }
+
+    func checkConnection() {
+        Task {
+            await checkConnectionAsync()
+        }
+    }
+
+    @MainActor
+    private func checkConnectionAsync() async {
+        do {
+            let models = try await LMStudioClient.shared.fetchModels()
+            self.availableModels = models
+            LMStudioService.shared.saveCachedModels(models)
+            self.isConnected = true
+            self.errorMessage = nil
+
+            // Auto-detect and auto-select the loaded model
+            if let loaded = models.first(where: { $0.isLoaded }) {
+                self.loadedModelId = loaded.id
+                self.selectedModel = loaded.id
+            } else if !models.contains(where: { $0.id == self.selectedModel }), let first = models.first {
+                self.selectedModel = first.id
+            }
+        } catch {
+            self.isConnected = false
+            self.loadedModelId = nil
+            // When offline, do NOT run `lms ls` CLI which wakes up LM Studio daemon.
+        }
+    }
+
+    /// Activates (boots server if needed, then loads into unified memory) a model with real-time UI progress updates.
+    func activateModel(modelId: String, convIdForNotification: UUID? = nil) {
+        guard !isModelLoading else { return }
+        isModelLoading = true
+        modelLoadProgress = 0.0
+        modelLoadingStatus = "Preparing \(modelId)..."
+
+        if let convId = convIdForNotification {
+            appendSystemNotification("Initiating model activation for `\(modelId)`...", convId: convId)
+        }
+
+        Task {
+            do {
+                // 1. Check server status; start local server if offline
+                let isRunning = await LMStudioService.shared.isServerRunning()
+                if !isRunning {
+                    await MainActor.run {
+                        LMStudioService.shared.didJarvisLaunchServer = true
+                    }
+                    self.modelLoadingStatus = "Starting LM Studio local server..."
+                    self.modelLoadProgress = 0.15
+                    let mode = UserDefaults.standard.string(forKey: "lmStudioLaunchMode") ?? "headless"
+                    try await LMStudioService.shared.startServer(mode: mode)
+                    self.modelLoadProgress = 0.35
+                    self.modelLoadingStatus = "Server online. Checking memory..."
+                }
+
+                // 2. Authoritative check: Is the model ALREADY loaded in memory?
+                let loadedNow = await LMStudioService.shared.listLoadedModels()
+                if let alreadyLoaded = loadedNow.first(where: { $0.id == modelId || modelId.hasPrefix($0.id) || $0.id.hasPrefix(modelId) }) {
+                    self.selectedModel = alreadyLoaded.id
+                    self.loadedModelId = alreadyLoaded.id
+                    self.isConnected = true
+                    self.modelLoadProgress = 1.0
+                    self.modelLoadingStatus = "Model is ready!"
+                    if let convId = convIdForNotification {
+                        self.appendSystemNotification("Model `\(alreadyLoaded.id)` is already loaded in memory and ready.", convId: convId)
+                    }
+                    self.checkConnection()
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        self.isModelLoading = false
+                    }
+                    return
+                }
+
+                // 3. Unload other models to free unified memory and prevent guardrail failure
+                for other in loadedNow where other.id != modelId {
+                    self.modelLoadingStatus = "Freeing memory (unloading \(other.id))..."
+                    await LMStudioService.shared.unloadModel(modelKey: other.id)
+                }
+
+                // 4. Load model into memory with live percentage updates and auto-recovery
+                self.modelLoadingStatus = "Loading \(modelId) into memory..."
+                try await LMStudioService.shared.loadModel(modelKey: modelId) { [weak self] progress, status in
+                    Task { @MainActor in
+                        self?.modelLoadProgress = progress
+                        self?.modelLoadingStatus = status
+                    }
+                }
+
+                // 5. Finalize state
+                self.modelLoadProgress = 1.0
+                self.modelLoadingStatus = "Model loaded successfully!"
+                self.selectedModel = modelId
+                self.loadedModelId = modelId
+                self.isConnected = true
+                self.checkConnection()
+
+                if let convId = convIdForNotification {
+                    self.appendSystemNotification("Model `\(modelId)` loaded successfully into memory!", convId: convId)
+                }
+
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    self.isModelLoading = false
+                }
+            } catch {
+                self.isModelLoading = false
+                self.errorMessage = "Failed to load model: \(error.localizedDescription)"
+                if let convId = convIdForNotification {
+                    self.appendSystemNotification("Failed to load model `\(modelId)`: \(error.localizedDescription)", convId: convId)
+                }
+            }
+        }
+    }
+
+    /// One-click helper to start the server and load the selected or default model.
+    func startServerAndLoadModel() {
+        let target = selectedModel.isEmpty ? (availableModels.first?.id ?? "google/gemma-4-e2b") : selectedModel
+        activateModel(modelId: target)
     }
 
     func sendMessage() {
@@ -673,15 +823,26 @@ final class ChatViewModel: ObservableObject {
 
         case "model":
             if argument.isEmpty {
-                let list = availableModels.map { "\($0.id)\($0.isLoaded ? " (Loaded)" : "")" }.joined(separator: "\n- ")
-                appendSystemNotification("Current Model: `\(selectedModel)`\n\nAvailable Models:\n- \(list.isEmpty ? "None detected" : list)", convId: convId)
+                let list = availableModels.map { model in
+                    if model.isLoaded {
+                        return "• `\(model.id)` *(Loaded in Memory)*"
+                    } else {
+                        return "• `\(model.id)` *(Available on Disk — `/model \(model.id)` to load)*"
+                    }
+                }.joined(separator: "\n")
+                appendSystemNotification("Current Model: `\(selectedModel)`\n\nAvailable Models:\n\(list.isEmpty ? "• None detected" : list)", convId: convId)
             } else {
-                if let match = availableModels.first(where: { $0.id.lowercased().contains(argument.lowercased()) }) {
-                    selectedModel = match.id
-                    appendSystemNotification("Switched model to: `\(match.id)`", convId: convId)
+                let lowerArg = argument.lowercased()
+                if let match = availableModels.first(where: { $0.id.lowercased().contains(lowerArg) }) {
+                    if match.isLoaded && isConnected {
+                        selectedModel = match.id
+                        loadedModelId = match.id
+                        appendSystemNotification("Switched to loaded model: `\(match.id)`", convId: convId)
+                    } else {
+                        activateModel(modelId: match.id, convIdForNotification: convId)
+                    }
                 } else {
-                    selectedModel = argument
-                    appendSystemNotification("Set model to: `\(argument)`", convId: convId)
+                    activateModel(modelId: argument, convIdForNotification: convId)
                 }
             }
 

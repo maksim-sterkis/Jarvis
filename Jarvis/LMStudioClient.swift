@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct LMModelInfo: Identifiable, Equatable {
+struct LMModelInfo: Identifiable, Equatable, Codable {
     let id: String
     let isLoaded: Bool
     let contextLength: Int?

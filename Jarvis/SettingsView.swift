@@ -7,12 +7,18 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
-    @AppStorage("showMenuBarExtra") private var showMenuBarExtra: Bool = true
+    @AppStorage("showMenuBarExtra") private var showMenuBarExtra: Bool = false
     @AppStorage("snapToTopAfterGeneration") private var snapToTopAfterGeneration: Bool = true
     @AppStorage("autoCollapseToolOutput") private var autoCollapseToolOutput: Bool = true
+    @AppStorage("autoScrollSlashMenuOnHover") private var autoScrollSlashMenuOnHover: Bool = false
+    @AppStorage("autoStopServerOnQuit") private var autoStopServerOnQuit: Bool = true
+    @AppStorage("autoStartServerOnLaunch") private var autoStartServerOnLaunch: Bool = false
+    @AppStorage("lmStudioLaunchMode") private var lmStudioLaunchMode: String = "headless"
     @AppStorage("agentSecurityMode") private var agentSecurityMode: AgentSecurityMode = .alwaysAsk
     @State private var autoApprovedTools: [String] = ToolAutoApprovalManager.getAutoApprovedTools()
     @State private var autoApprovedCommands: [String] = ToolAutoApprovalManager.getAutoApprovedCommands()
+    @State private var isServerActionInProgress: Bool = false
+    @State private var serverActionFeedback: String? = nil
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
@@ -63,6 +69,18 @@ struct SettingsView: View {
                         }
                     }
                     .toggleStyle(.checkbox)
+
+                    Toggle(isOn: $autoScrollSlashMenuOnHover) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Auto-Scroll Slash Palette on Hover")
+                                .font(.body)
+                            Text("Automatically scrolls the slash command list when hovering over options with the mouse. When disabled, options highlight without jumping the scroll position.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
                 }
 
                 Divider()
@@ -88,15 +106,15 @@ struct SettingsView: View {
                 Divider()
 
                 // Local Model (LM Studio) Section
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     Label("Local Inference Engine", systemImage: "cpu")
                         .font(.subheadline.bold())
 
                     HStack {
-                        Text("LM Studio Server:")
+                        Text("LM Studio Server API:")
                             .font(.body)
                         Spacer()
-                        Text("http://127.0.0.1:1234/v1")
+                        Text("http://127.0.0.1:1234")
                             .font(.system(.caption, design: .monospaced))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -104,7 +122,107 @@ struct SettingsView: View {
                             .cornerRadius(6)
                     }
 
-                    Text("Jarvis connects directly to your local model server on Apple Silicon.")
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Server Launch Mode")
+                                .font(.body)
+                            Text("Headless starts the fast daemon without opening windows; Desktop App launches the full GUI.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Picker("Launch Mode", selection: $lmStudioLaunchMode) {
+                            Text("Headless (lms)").tag("headless")
+                            Text("Desktop App").tag("app")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 220)
+                    }
+
+                    Toggle(isOn: $autoStartServerOnLaunch) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Auto-Start Server on Launch")
+                                .font(.body)
+                            Text("Automatically starts the LM Studio server and loads your default model when Jarvis opens. Disabled by default so models only load when you request them.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+
+                    Toggle(isOn: $autoStopServerOnQuit) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Unload Models & Stop Server on Quit")
+                                .font(.body)
+                            Text("Automatically unloads models and stops LM Studio when quitting Jarvis, provided Jarvis launched it. If LM Studio was already running before opening Jarvis, it remains running.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+
+                    HStack(spacing: 8) {
+                        if let lms = LMStudioService.shared.lmsPath {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.system(size: 12))
+                            Text("CLI detected: \(lms)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        } else {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 12))
+                            Text("CLI tool 'lms' not detected in standard paths.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            isServerActionInProgress = true
+                            serverActionFeedback = nil
+                            Task {
+                                do {
+                                    let isRunning = await LMStudioService.shared.isServerRunning()
+                                    if isRunning {
+                                        try await LMStudioService.shared.stopServer()
+                                        serverActionFeedback = "Server stopped."
+                                    } else {
+                                        try await LMStudioService.shared.startServer(mode: lmStudioLaunchMode)
+                                        serverActionFeedback = "Server started successfully!"
+                                    }
+                                } catch {
+                                    serverActionFeedback = "Error: \(error.localizedDescription)"
+                                }
+                                isServerActionInProgress = false
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                if isServerActionInProgress {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                        .frame(width: 12, height: 12)
+                                }
+                                Text("Toggle Server")
+                                    .font(.caption.weight(.medium))
+                            }
+                        }
+                        .disabled(isServerActionInProgress)
+                    }
+
+                    if let feedback = serverActionFeedback {
+                        Text(feedback)
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+
+                    Text("Jarvis connects directly to your local model server on Apple Silicon unified memory.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -287,6 +405,11 @@ struct SettingsView: View {
         .frame(width: 620)
         .frame(minHeight: 560, idealHeight: 640)
         .background(Color(nsColor: .windowBackgroundColor))
+        .background(
+            WindowAccessor { window in
+                window.identifier = NSUserInterfaceItemIdentifier("JarvisSettingsWindow")
+            }
+        )
         .onAppear {
             autoApprovedTools = ToolAutoApprovalManager.getAutoApprovedTools()
             autoApprovedCommands = ToolAutoApprovalManager.getAutoApprovedCommands()

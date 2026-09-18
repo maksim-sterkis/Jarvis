@@ -18,6 +18,7 @@ struct PromptInputView: View {
     @State private var selectedCommandIndex: Int = 0
     @State private var isMenuDismissed: Bool = false
     @State private var lastLoadedCommand: String? = nil
+    @AppStorage("autoScrollSlashMenuOnHover") private var autoScrollSlashMenuOnHover: Bool = false
 
     private var isSlashCommandActive: Bool {
         text.hasPrefix("/") && !text.contains(" ") && isFocused.wrappedValue && !isMenuDismissed
@@ -125,7 +126,9 @@ struct PromptInputView: View {
                                     .onHover { hovering in
                                         if hovering {
                                             hoveredCommandId = cmd.id
-                                            selectedCommandIndex = index
+                                            if autoScrollSlashMenuOnHover {
+                                                selectedCommandIndex = index
+                                            }
                                         } else if hoveredCommandId == cmd.id {
                                             hoveredCommandId = nil
                                         }

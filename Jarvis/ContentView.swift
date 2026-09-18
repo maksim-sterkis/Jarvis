@@ -15,6 +15,11 @@ struct ContentView: View {
             ChatDetailView(viewModel: viewModel)
         }
         .frame(minWidth: 820, minHeight: 560)
+        .background(
+            WindowAccessor { window in
+                window.identifier = NSUserInterfaceItemIdentifier("JarvisMainWindow")
+            }
+        )
     }
 }
 
@@ -37,23 +42,47 @@ struct ChatDetailView: View {
             HStack(spacing: 10) {
                 // 1. Model Selector Menu
                 Menu {
-                    if viewModel.availableModels.isEmpty {
-                        Button(displayModelName(viewModel.selectedModel)) {
-                            viewModel.selectedModel = "google/gemma-4-e2b"
-                        }
-                    } else {
-                        ForEach(viewModel.availableModels) { model in
-                            Button(action: {
-                                viewModel.selectedModel = model.id
-                            }) {
-                                Label {
-                                    Text(boldMenuLabel(model.id, isLoaded: model.isLoaded))
-                                } icon: {
-                                    if model.id == viewModel.selectedModel {
-                                        Image(systemName: "checkmark")
+                    let loadedModels = viewModel.availableModels.filter { $0.isLoaded }
+                    let diskModels = viewModel.availableModels.filter { !$0.isLoaded }
+
+                    if !loadedModels.isEmpty {
+                        Section("Loaded in Memory") {
+                            ForEach(loadedModels) { model in
+                                Button(action: {
+                                    viewModel.selectedModel = model.id
+                                    viewModel.loadedModelId = model.id
+                                }) {
+                                    Label {
+                                        Text(model.id)
+                                    } icon: {
+                                        if model.id == viewModel.selectedModel {
+                                            Image(systemName: "checkmark")
+                                        }
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if !diskModels.isEmpty {
+                        Section("Available on Disk (Click to Load)") {
+                            ForEach(diskModels) { model in
+                                Button(action: {
+                                    viewModel.activateModel(modelId: model.id)
+                                }) {
+                                    Label {
+                                        Text(model.id)
+                                    } icon: {
+                                        Image(systemName: "arrow.down.circle")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if viewModel.availableModels.isEmpty {
+                        Button(displayModelName(viewModel.selectedModel)) {
+                            viewModel.activateModel(modelId: "google/gemma-4-e2b")
                         }
                     }
 
@@ -65,7 +94,7 @@ struct ChatDetailView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(viewModel.isConnected ? Color.green : Color.orange)
+                            .fill(viewModel.isConnected ? Color.green : (viewModel.isModelLoading ? Color.blue : Color.orange))
                             .frame(width: 7, height: 7)
 
                         Text(displayModelName(viewModel.selectedModel))
@@ -142,10 +171,26 @@ struct ChatDetailView: View {
                 .buttonStyle(.plain)
                 .help("Active directory for commands and file tools. Click to change.")
 
-                if !viewModel.isConnected {
-                    Text("Offline • Check LM Studio (127.0.0.1:1234)")
-                        .font(.caption)
-                        .foregroundColor(.orange)
+                if !viewModel.isConnected && !viewModel.isModelLoading {
+                    HStack(spacing: 8) {
+                        Text("Offline")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.orange)
+
+                        Button(action: {
+                            viewModel.startServerAndLoadModel()
+                        }) {
+                            Text("Start Server & Load")
+                                .font(.system(size: 11, weight: .semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.orange.opacity(0.15))
+                                .foregroundColor(.orange)
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Launch local server and load model")
+                    }
                 }
 
                 Spacer()
@@ -162,6 +207,70 @@ struct ChatDetailView: View {
             )
 
             Divider()
+
+            // Model Loading Progress Bar Banner
+            if viewModel.isModelLoading {
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .frame(width: 16, height: 16)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                let statusText = (viewModel.modelLoadingStatus.isEmpty ? "Loading model..." : viewModel.modelLoadingStatus)
+                                    .replacingOccurrences(of: #"\s*\(\d{1,3}%\)"#, with: "", options: .regularExpression)
+                                Text(statusText)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                if viewModel.modelLoadProgress > 0 {
+                                    Text("\(Int(viewModel.modelLoadProgress * 100))%")
+                                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                }
+                            }
+
+                            // Custom Linear Progress Bar with Smooth Gradient Fill
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.secondary.opacity(0.15))
+                                        .frame(height: 6)
+
+                                    Capsule()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [Color.accentColor.opacity(0.8), Color.accentColor],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(width: max(8, geo.size.width * CGFloat(min(1.0, max(0.0, viewModel.modelLoadProgress)))), height: 6)
+                                        .animation(.easeInOut(duration: 0.25), value: viewModel.modelLoadProgress)
+                                }
+                            }
+                            .frame(height: 6)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.accentColor.opacity(0.08))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.accentColor.opacity(0.25)),
+                    alignment: .bottom
+                )
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity.combined(with: .move(edge: .top))
+                ))
+            }
 
             // Chat Area
             ScrollViewReader { proxy in

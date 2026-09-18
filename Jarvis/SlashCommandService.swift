@@ -67,7 +67,7 @@ final class SlashCommandService {
         SlashCommand(
             name: "model",
             syntax: "/model [name]",
-            description: "Switch to a specific local model or list loaded models",
+            description: "Switch to, boot server, and load local model into memory",
             icon: "cpu",
             category: .model
         ),
