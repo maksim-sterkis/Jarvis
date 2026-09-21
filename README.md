@@ -24,18 +24,18 @@ Jarvis inspects multi-file codebases, executes terminal workflows, runs test sui
 
 ---
 
-## 📚 Documentation Index
+## Documentation Index
 
 Explore the comprehensive documentation guides in the [`docs/`](docs/) directory:
 
 | Guide | Description |
 | :--- | :--- |
-| 🚀 **[Getting Started & Configuration](docs/getting-started.md)** | Hardware prerequisites, LM Studio setup, building from source, and settings. |
-| 🏗️ **[Architecture & Execution Engine](docs/architecture.md)** | Subsystem diagrams, autonomous plan-and-solve sequence, and codebase file tree. |
-| 🛡️ **[Security & Permission Gateway](docs/security.md)** | 3-tier security policy, permission flowchart, whitelist engine, and shell heuristics. |
-| ⚡ **[Core Features & Capabilities](docs/features.md)** | Deep dive into inference lifecycle, reasoning popovers, playbooks, and context compression. |
-| 🛠️ **[Tool Ecosystem Reference](docs/tools.md)** | Complete parameter schemas and behaviors for all 6 native system tools. |
-| ⌨️ **[Slash Commands & Shortcuts](docs/commands.md)** | Interactive command overlay, dynamic argument autocomplete, and keyboard shortcuts. |
+| **[Getting Started & Configuration](docs/getting-started.md)** | Hardware prerequisites, LM Studio setup, building from source, and settings. |
+| **[Architecture & Execution Engine](docs/architecture.md)** | Subsystem diagrams, autonomous plan-and-solve sequence, and codebase file tree. |
+| **[Security & Permission Gateway](docs/security.md)** | 3-tier security policy, permission flowchart, whitelist engine, and shell heuristics. |
+| **[Core Features & Capabilities](docs/features.md)** | Deep dive into inference lifecycle, reasoning popovers, playbooks, and context compression. |
+| **[Tool Ecosystem Reference](docs/tools.md)** | Complete parameter schemas and behaviors for all 6 native system tools. |
+| **[Slash Commands & Shortcuts](docs/commands.md)** | Interactive command overlay, dynamic argument autocomplete, and keyboard shortcuts. |
 
 ---
 
