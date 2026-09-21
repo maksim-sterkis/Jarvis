@@ -50,11 +50,12 @@ Users can select the active security policy in **Settings** (`Cmd + ,`) under th
 
 When a tool call requires user confirmation, Jarvis pauses execution and presents an interactive `ToolExecutionCardView`:
 
-- **Full Parameter Inspection**: View exact file paths, written content, shell commands, and working directory.
+- **Full Parameter Inspection & Inline Editing**: View exact file paths, written content, shell commands, and working directory. Click **Edit** to modify commands or file contents directly before executing.
 - **Approval Actions**:
   - **Approve Once**: Runs this specific invocation without modifying global permissions.
   - **Always Allow**: Auto-approves this invocation and appends the base command (e.g. `swift`, `python3`, `git`) to your persistent whitelist.
-  - **Deny**: Cancels the call immediately and sends a feedback error back to the model so it can pivot to an alternative strategy.
+  - **Decline**: Cancels the call immediately and sends a cancellation observation to the model.
+  - **Decline with Feedback Note**: Click the message bubble icon to attach a custom guidance note to the model (e.g. *"Use pytest instead of python3 unittest"*), helping it adjust its plan.
 
 ---
 

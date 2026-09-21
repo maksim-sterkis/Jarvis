@@ -103,15 +103,15 @@ sequenceDiagram
     VM->>VM: Update Working Memory checklist [x]
     VM->>LLM: Inject Observation (Tool Output)
     
-    Note over VM,LLM: Autonomous Cycle repeats (up to 15 steps per turn)
+    Note over VM,LLM: Autonomous Cycle repeats (safeguarded at 8 continuous actions per turn)
     
     LLM-->>VM: Final Synthesized Answer
     VM-->>UI: Render Markdown Response
 ```
 
 ### Execution Safeguards
-- **15-Step Execution Cap**: Protects against runaway inference loops while providing sufficient headroom for multi-file refactors.
-- **Immediate Subprocess Termination**: Clicking "Stop" halts running child processes (`/bin/zsh`) and terminates SSE streams immediately.
+- **8-Action Loop Guard**: Protects against runaway inference loops and excessive token usage by pausing after 8 continuous automated tool calls with a status report.
+- **Immediate Subprocess Termination**: Clicking "Stop" or pressing `⌘⏎` halts running child processes (`/bin/zsh`) and terminates SSE streams immediately.
 - **State Preservation**: Any partial output, completed tool calls, or generated files are cleanly retained upon user cancellation.
 
 ---

@@ -85,7 +85,7 @@ Trigger commands anywhere in the chat prompt using `/`:
 | `/instructions`| `/instructions` | Opens `~/.jarvis/instructions.md` in the in-app rendered markdown viewer. |
 | `/export` | `/export` | Formats and copies complete conversation as Markdown to clipboard. |
 
-*Supports `Tab` auto-completion for commands and sub-arguments.* See the [Slash Commands Guide](docs/commands.md) for full details.
+*Press `Return` (`⏎`) to send, `Option + Return` (`⌥⏎`) to insert a newline, `Tab` to autocomplete slash commands, and `Esc` to dismiss.* See the [Slash Commands & Shortcuts Guide](docs/commands.md) for full details.
 
 ---
 

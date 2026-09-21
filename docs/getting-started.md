@@ -60,32 +60,37 @@ xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -configuration Release build
 
 ## Configuration & Settings
 
-Open the **Settings panel** via `Cmd + ,` or from the **Jarvis** menu.
+Open the **Settings panel** via `Cmd + ,` or from the **Jarvis** application menu.
 
-### 1. Appearance & Menu Bar
-- **Theme**: Toggle between **System**, **Light**, and **Dark** mode.
-- **Menu Bar Extra**: Enable the status bar icon for quick background status and fast access.
+### 1. Appearance & Theming
+- **Theme**: Toggle between **System**, **Light**, and **Dark** mode. Changes apply immediately to window background and chrome.
 
-### 2. Local Inference Engine
+### 2. Scrolling Behavior
+- **Auto-Scroll & Snap to Prompt**: Follows streaming text during generation, then smoothly scrolls back to the prompt when finished.
+- **Auto-Scroll Slash Palette on Hover**: Controls whether hovering over items in the slash command overlay automatically aligns scroll position.
+
+### 3. Menu Bar Integration
+- **Show Jarvis in macOS Menu Bar**: Adds a status bar icon in the top-right macOS menu bar for quick access or clean quitting.
+
+### 4. Local Inference Engine
+- **Server API**: Directly targets `http://127.0.0.1:1234`.
 - **Launch Mode**:
-  - **Headless (`lms`)**: Fast, background CLI daemon without GUI windows.
-  - **Desktop App**: Launches the full LM Studio application interface.
-- **Auto-Start Server on Launch**: Automatically boots the local inference daemon and loads your default model when Jarvis opens.
-- **Unload Models & Stop Server on Quit**: When closing Jarvis, automatically unloads model weights and stops the background server if Jarvis was the process that started it.
+  - **Headless (`lms`)**: Starts the fast background daemon without opening GUI windows.
+  - **Desktop App**: Launches the full LM Studio desktop app.
+- **Auto-Start Server on Launch**: Boots the local inference daemon and loads your selected model when Jarvis opens (disabled by default).
+- **Unload Models & Stop Server on Quit**: Automatically unloads model weights and stops the LM Studio daemon when quitting Jarvis (if Jarvis started it).
+- **CLI Detection**: Checks standard paths for `lms` and offers a one-click **"Toggle Server"** button.
 
-### 3. Security Policies & Whitelist
-- **Security Mode**:
-  - **Strict (Always Ask)**: Prompts for all reads, writes, and commands.
-  - **Auto-Approve Read Only** *(Recommended)*: Seamless read-only browsing; writes and commands require confirmation.
-  - **Full Autonomous**: Hands-free execution for automated tasks.
-- **Command Whitelist**: Review, add, or revoke pre-approved binaries (e.g. `swift`, `git`, `python3`).
+### 5. Agent & Terminal Permissions
+- **Action Approval Policy**:
+  - **Strict (Always Ask)**: Requires approval for every read, write, and command.
+  - **Auto-Approve Read Only** *(Default & Recommended)*: Auto-approves safe read calls (`read_file`, `read_multiple_files`, `list_directory`); prompts for modifications and shell commands.
+  - **Full Autonomous**: Runs all tool calls without prompting.
+- **Always-Allowed Whitelist**: View, revoke individual shell binaries (e.g. `git`, `swift`, `cargo`) or native tools, or click **"Revoke All"** to clear.
+- **Agent Instructions File**: Direct button to inspect and edit `AgentInstructions.md`.
+- **Auto-Collapse Command Output**: Automatically collapses tool output drawers when response generation completes.
 
-### 4. Default Reasoning Budget
-Configure the initial thinking token budget for models with reasoning support:
-- **Low**: ~1,024 tokens
-- **Medium**: ~4,096 tokens
-- **High**: ~8,192 tokens
-- **Max**: ~16,384 tokens
+*(Note: Reasoning token budgets are adjusted directly from the header toolbar thinking popover or via the [`/think`](commands.md#think) command, not in Settings.)*
 
 ---
 

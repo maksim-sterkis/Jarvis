@@ -24,7 +24,7 @@ Reads up to 50 files concurrently in a single roundtrip to minimize turn latency
 
 - **Parameters**:
   - `paths` (*array of strings, required*): The list of absolute or relative file paths to read.
-  - `max_bytes_per_file` (*integer, optional*): Maximum bytes to read per file (default: 65,536 bytes).
+  - `max_bytes_per_file` (*integer, optional*): Maximum bytes to read per file (default: 12,288 bytes).
 - **Behavior**:
   - Automatically resolves relative paths against the active working directory.
   - Expands tilde (`~`) prefixes.
@@ -35,7 +35,7 @@ Reads the exact text content of a single file from disk.
 
 - **Parameters**:
   - `path` (*string, required*): The file path to inspect.
-  - `max_bytes` (*integer, optional*): Maximum bytes to read before truncating with an offset warning.
+  - `max_bytes` (*integer, optional*): Maximum bytes to read before truncating with an offset warning (default: 102,400 bytes).
 - **Behavior**:
   - Returns raw UTF-8 string content.
   - Flags binary or non-UTF8 files cleanly.

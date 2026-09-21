@@ -6,14 +6,15 @@ Jarvis features an interactive command palette and a dynamic parameter autocompl
 
 ## Interactive Command Palette
 
-Typing `/` in the prompt input triggers the command overlay. 
+Typing `/` in the prompt input triggers the command overlay.
 
 - **Category Filtering**: Filter by category chips (**Context**, **Model**, **Tools**, **Session**).
-- **Fuzzy Search**: Matching on command names, syntax, and descriptions.
+- **Fuzzy Search**: Matches on command names, syntax, and descriptions.
 - **Dynamic Argument Autocomplete**: As soon as a command and space are typed (e.g. `/playbooks `), the overlay shifts into argument condensation mode, presenting live contextual options.
-- **Keyboard Navigation**:
+- **Overlay Navigation**:
   - `Up` / `Down`: Move selection highlight.
-  - `Tab` or `Enter`: Insert the selected command or argument.
+  - `Tab`: Autocomplete and insert the selected option into the prompt.
+  - `Return`: Select the highlighted suggestion, or immediately execute if it is a complete executable command.
   - `Esc`: Dismiss the overlay.
 
 ---
@@ -23,7 +24,7 @@ Typing `/` in the prompt input triggers the command overlay.
 | Command | Syntax | Category | Description |
 | :--- | :--- | :--- | :--- |
 | [`/compress`](#compress) | `/compress [low\|med\|high]` | `Context` | Condenses conversation history into a memory snapshot anchor while preserving visual UI messages. |
-| [`/think`](#think) | `/think [low\|med\|high\|max\|off]` | `Model` | Sets the reasoning token budget, custom token number (e.g. `2048`), or toggles reasoning off. |
+| [`/think`](#think) | `/think [low\|med\|high\|max\|off]` | `Model` | Sets reasoning token budget, custom token number (e.g. `2048`), or toggles reasoning off. |
 | [`/model`](#model) | `/model [name]` | `Model` | Switches active model, boots LM Studio if offline, and loads weights into unified memory. |
 | [`/dir`](#dir) | `/dir [path]` | `Tools` | Sets the active project working directory, or opens the native macOS folder picker if omitted. |
 | [`/playbooks`](#playbooks) | `/playbooks [name]` | `Tools` | Opens the native in-app rendered markdown viewer with tabbed browsing across all playbooks. |
@@ -40,21 +41,21 @@ Typing `/` in the prompt input triggers the command overlay.
 Condenses prior conversation turns into a compact `<memory_snapshot>` anchor block to free up context window space.
 
 - **Options**:
-  - `low`: Light summarization, preserving high conversational nuance.
-  - `med` *(default)*: Balanced snapshot, ideal for normal multi-turn engineering workflows.
-  - `high`: Maximum compression, retaining only key facts, architectural decisions, and file targets.
+  - `low`: Light summarization (~50% retention).
+  - `med` *(default)*: Balanced snapshot (~75% retention).
+  - `high`: Maximum compaction (~90% compact), retaining only core facts, decisions, and file targets.
 - **Autocomplete**: Typing `/compress ` dynamically displays the 3 level badges for instant `Tab` completion.
 
 ### `/think`
 Controls model reasoning and chain-of-thought token generation.
 
 - **Presets**:
-  - `low`: ~1,024 reasoning tokens.
-  - `med`: ~2,048 reasoning tokens.
-  - `high`: ~4,096 reasoning tokens.
-  - `max`: ~8,192 deep reasoning tokens.
-  - `off`: Disables reasoning tokens for direct, fast response streaming.
-- **Custom Budgets**: Provide numeric values directly (e.g. `/think 3000`).
+  - `low`: 512 reasoning tokens.
+  - `med`: 1,536 reasoning tokens.
+  - `high`: 3,072 reasoning tokens.
+  - `max`: 6,144 deep reasoning tokens.
+  - `off`: Disables reasoning tokens for direct, immediate responses.
+- **Custom Budgets**: Provide numeric values directly between 256 and 8,192 (e.g. `/think 2048`).
 - **Toggle**: Running `/think` with no arguments toggles reasoning on/off.
 
 ### `/model`
@@ -88,17 +89,21 @@ Exports the entire chat thread formatted in GitHub-flavored Markdown directly to
 
 ---
 
-## Global Keyboard Shortcuts
+## Keyboard Shortcuts & Input Behavior
 
-| Shortcut | Action |
-| :--- | :--- |
-| `Cmd + N` | Start a new blank chat session |
-| `Cmd + ,` | Open Jarvis Settings panel |
-| `Cmd + K` | Focus prompt input box |
-| `Tab` | Autocomplete selected suggestion in slash palette |
-| `Esc` | Dismiss active slash overlay |
-| `Enter` | Submit prompt or execute selected slash command |
-| `Shift + Enter` | Insert newline in prompt input |
+| Shortcut | Context | Exact Behavior |
+| :--- | :--- | :--- |
+| `Return` (`⏎`) | Prompt Input | **Submits and sends the message** (fires `.onSubmit` to trigger model inference). |
+| `Option + Return` (`⌥⏎`) | Prompt Input | Inserts a newline into the prompt without sending (standard macOS multi-line text entry). |
+| `Cmd + Return` (`⌘⏎`) | Prompt Input | Triggers the primary Send / Stop action button (sends message, or stops active generation). |
+| `Up` / `Down` | Slash Overlay | Move selection highlight through command and argument suggestions. |
+| `Tab` | Slash Overlay | Autocompletes and inserts the highlighted suggestion into the prompt. |
+| `Return` (`⏎`) | Slash Overlay | Selects the highlighted suggestion, or executes it immediately if fully specified. |
+| `Esc` | Slash Overlay | Dismisses the slash command suggestions overlay. |
+| `Esc` | Document Viewer | Closes the in-app rendered markdown viewer modal sheet. |
+| `Cmd + N` | Sidebar | Starts a new conversation. |
+| `Cmd + ,` | Application | Opens the native Settings panel. |
+| `Cmd + Q` | Application | Quits Jarvis and cleanly terminates background processes. |
 
 ---
 

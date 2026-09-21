@@ -1,6 +1,6 @@
 # Core Features & Capabilities
 
-Jarvis pairs native macOS speed with local LLM autonomy. Below is a comprehensive breakdown of its primary capabilities.
+Jarvis pairs native macOS speed with local LLM autonomy. Below is a comprehensive breakdown of its primary capabilities verified directly against the Swift codebase.
 
 ---
 
@@ -24,8 +24,8 @@ Jarvis pairs native macOS speed with local LLM autonomy. Below is a comprehensiv
 ## 2. Autonomous Multi-Turn Agentic Workflows
 
 - **Autonomous Feedback Loop**: Jarvis plans, calls tools, evaluates stderr/stdout observations, adjusts its approach when errors arise, and loops autonomously until the task is complete.
-- **Execution Safeguard**: Enforces a 15-step execution limit per prompt to prevent infinite loops while giving sufficient headroom for large multi-file tasks.
-- **Instant Generation Stop**: Safely cancels streaming inference and aborts active shell subprocesses at any millisecond without losing generated content.
+- **8-Action Loop Safety Guard**: Enforces an 8-action continuous execution safeguard per prompt to prevent infinite loops and runaway token usage, pausing with a clear status report if more user guidance is needed.
+- **Instant Generation Stop**: Safely cancels streaming inference and aborts active shell subprocesses at any millisecond (`⌘⏎` or stop button) without losing generated content.
 
 ---
 
@@ -37,8 +37,13 @@ Jarvis pairs native macOS speed with local LLM autonomy. Below is a comprehensiv
 - **Hardware-Accelerated 120 FPS Thinking Dropdown**:
   - Smooth ProMotion-optimized floating overlay panel anchored to the toolbar via `ThinkingButtonFramePreferenceKey`.
   - Zero layout jumping or content displacement when toggling.
-  - Interactive continuous token budget slider (256 to 6,144 tokens) with real-time feedback.
-  - Quick presets: **Low (1,024)**, **Med (2,048)**, **High (4,096)**, **Max (8,192)**, and **Off**.
+  - Continuous token budget slider (**256 to 6,144 tokens in steps of 256**) with real-time feedback.
+  - Verified quick presets:
+    - **Low**: 512 tokens
+    - **Med**: 1,536 tokens
+    - **High**: 3,072 tokens
+    - **Max**: 6,144 tokens
+    - **Off**: Disables reasoning tokens for direct, fast response streaming.
 
 ---
 
@@ -54,7 +59,10 @@ Jarvis pairs native macOS speed with local LLM autonomy. Below is a comprehensiv
 
 - **Live Token Gauge**: Real-time meters in the header and sidebar track active context tokens against the model's physical window (e.g. 131,072 tokens for Gemma 4).
 - **Compression Boundaries**: When conversations grow large, Jarvis establishes non-destructive compression boundaries (`CompressionBoundaryView.swift`). Earlier turns are compressed into a compact memory snapshot anchor while preserving the full visual history in the UI.
-- **Manual Triggering**: Run `/compress [low|med|high]` anytime to snapshot history on demand.
+- **Manual Triggering**: Run `/compress [low|med|high]` anytime:
+  - `low`: ~50% retention
+  - `med`: ~75% balanced retention (default)
+  - `high`: ~90% compact retention
 
 ---
 
