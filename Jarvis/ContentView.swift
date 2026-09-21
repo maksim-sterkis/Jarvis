@@ -15,6 +15,9 @@ struct ContentView: View {
             ChatDetailView(viewModel: viewModel)
         }
         .frame(minWidth: 820, minHeight: 560)
+        .sheet(item: $viewModel.activeDocumentViewer) { _ in
+            MarkdownDocumentViewerSheet(documentState: $viewModel.activeDocumentViewer)
+        }
         .background(
             WindowAccessor { window in
                 window.identifier = NSUserInterfaceItemIdentifier("JarvisMainWindow")
@@ -23,9 +26,17 @@ struct ContentView: View {
     }
 }
 
+struct ThinkingButtonFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
 struct ChatDetailView: View {
     @ObservedObject var viewModel: ChatViewModel
     @State private var showThinkingPopover: Bool = false
+    @State private var thinkingButtonFrame: CGRect = .zero
     @AppStorage("snapToTopAfterGeneration") private var snapToTopAfterGeneration: Bool = true
     @FocusState private var isInputFocused: Bool
 
@@ -113,7 +124,9 @@ struct ChatDetailView: View {
 
                 // 2. Thinking / Reasoning Button (Fixed 155pt width, no truncation, no token numbers)
                 Button(action: {
-                    showThinkingPopover.toggle()
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.82)) {
+                        showThinkingPopover.toggle()
+                    }
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: viewModel.isThinkingEnabled ? "brain.fill" : "brain")
@@ -139,9 +152,14 @@ struct ChatDetailView: View {
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-                .popover(isPresented: $showThinkingPopover, arrowEdge: .bottom) {
-                    ThinkingPopoverView(viewModel: viewModel, isPresented: $showThinkingPopover)
-                }
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ThinkingButtonFramePreferenceKey.self,
+                            value: geo.frame(in: .named("ChatDetailContainer"))
+                        )
+                    }
+                )
 
                 // 3. Workspace Working Directory Selector
                 Button(action: {
@@ -194,17 +212,21 @@ struct ChatDetailView: View {
                 }
 
                 Spacer()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isInputFocused = false
+                        if showThinkingPopover {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                                showThinkingPopover = false
+                            }
+                        }
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
             .background(Color(nsColor: .windowBackgroundColor))
-            .contentShape(Rectangle())
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    isInputFocused = false
-                    NSApp.keyWindow?.makeFirstResponder(nil)
-                }
-            )
+            .zIndex(100)
 
             Divider()
 
@@ -449,6 +471,11 @@ struct ChatDetailView: View {
                 .simultaneousGesture(
                     TapGesture().onEnded {
                         isInputFocused = false
+                        if showThinkingPopover {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                                showThinkingPopover = false
+                            }
+                        }
                         NSApp.keyWindow?.makeFirstResponder(nil)
                     }
                 )
@@ -460,6 +487,11 @@ struct ChatDetailView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         isInputFocused = false
+                        if showThinkingPopover {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                                showThinkingPopover = false
+                            }
+                        }
                         NSApp.keyWindow?.makeFirstResponder(nil)
                     }
 
@@ -506,6 +538,7 @@ struct ChatDetailView: View {
                         contextUsed: viewModel.currentContextTokens,
                         contextTotal: viewModel.totalContextLimit,
                         isFocused: $isInputFocused,
+                        availableModelNames: viewModel.availableModels.map { $0.id },
                         onSend: {
                             viewModel.sendMessage()
                         },
@@ -520,14 +553,52 @@ struct ChatDetailView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         isInputFocused = false
+                        if showThinkingPopover {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                                showThinkingPopover = false
+                            }
+                        }
                         NSApp.keyWindow?.makeFirstResponder(nil)
                     }
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .coordinateSpace(name: "ChatDetailContainer")
+        .onPreferenceChange(ThinkingButtonFramePreferenceKey.self) { frame in
+            thinkingButtonFrame = frame
+        }
+        .overlay(alignment: .topLeading) {
+            if showThinkingPopover && thinkingButtonFrame != .zero {
+                ZStack(alignment: .topLeading) {
+                    // 1. Transparent window-wide backdrop to dismiss on outside click
+                    Color.black.opacity(0.0001)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.22, dampingFraction: 0.82)) {
+                                showThinkingPopover = false
+                            }
+                        }
+
+                    // 2. Popover card anchored right below the Thinking button
+                    ThinkingPopoverView(viewModel: viewModel, isPresented: $showThinkingPopover)
+                        .offset(x: thinkingButtonFrame.minX, y: thinkingButtonFrame.maxY + 6)
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.95, anchor: .topLeading)
+                                    .combined(with: .opacity)
+                                    .combined(with: .offset(y: -4)),
+                                removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading))
+                            )
+                        )
+                }
+            }
+        }
         .onChange(of: isInputFocused) { focused in
             if focused && showThinkingPopover {
-                showThinkingPopover = false
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                    showThinkingPopover = false
+                }
             }
         }
     }
@@ -681,7 +752,9 @@ struct ThinkingPopoverView: View {
                     .labelsHidden()
 
                 Button(action: {
-                    isPresented = false
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                        isPresented = false
+                    }
                 }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))
@@ -743,6 +816,16 @@ struct ThinkingPopoverView: View {
         }
         .padding(16)
         .frame(width: 280)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.98))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: Color.black.opacity(0.18), radius: 14, x: 0, y: 6)
     }
 }
 

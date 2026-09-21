@@ -19,15 +19,29 @@ final class AgentPromptManager {
         let homeDir = NSHomeDirectory()
         let nowString = ISO8601DateFormatter().string(from: Date())
 
+        let activeDir = workingDirectory.isEmpty ? homeDir : workingDirectory
+        let playbooksSection = PlaybookService.shared.playbooksSummaryMarkdown()
+
         let context = """
 
 ---
-## Runtime Environment
+## Runtime Environment & Whereabouts
 - Current User: \(username)
-- User Home Directory: \(homeDir)
-- Active Working Directory: \(workingDirectory.isEmpty ? homeDir : workingDirectory)
+- Home Directory (~): \(homeDir)
+- Active Working Directory: \(activeDir)
 - System Time: \(nowString)
 - Operating System: macOS (Apple Silicon)
+
+### Critical Path & Directory Rules:
+1. **Absolute Paths**: Any path starting with `~` or `/` is absolute (e.g. `~/benchmark_tool` resolves directly to `\(homeDir)/benchmark_tool`). NEVER duplicate or prepend the home directory.
+2. **Relative Paths**: Any path without a leading `/` or `~` (e.g. `main.py`, `src/utils.py`) resolves strictly relative to your Active Working Directory (`\(activeDir)`).
+3. **Running Scripts in Subfolders**: When you create files in a subfolder (e.g. `~/benchmark_tool` or `benchmark_tool`), running commands like `python3 test_perf.py` requires you to either:
+   - Pass `working_directory: "~/benchmark_tool"` in `run_terminal_command`, OR
+   - Specify the path in the command (e.g. `python3 ~/benchmark_tool/test_perf.py`).
+
+---
+## Specialized Playbooks (Read On-Demand)
+\(playbooksSection)
 """
 
         var protocolText = """

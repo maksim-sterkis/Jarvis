@@ -11,6 +11,7 @@ struct PromptInputView: View {
     var contextUsed: Int = 0
     var contextTotal: Int = 8192
     var isFocused: FocusState<Bool>.Binding
+    var availableModelNames: [String] = []
     var onSend: () -> Void
     var onStop: () -> Void
 
@@ -20,24 +21,37 @@ struct PromptInputView: View {
     @State private var lastLoadedCommand: String? = nil
     @AppStorage("autoScrollSlashMenuOnHover") private var autoScrollSlashMenuOnHover: Bool = false
 
-    private var isSlashCommandActive: Bool {
-        text.hasPrefix("/") && !text.contains(" ") && isFocused.wrappedValue && !isMenuDismissed
+    private var currentSuggestions: [CommandSuggestion] {
+        SlashCommandService.shared.suggestions(for: text, availableModels: availableModelNames)
     }
 
-    private var matchingCommands: [SlashCommand] {
-        SlashCommandService.shared.matchingCommands(for: text)
+    private var isSlashCommandActive: Bool {
+        text.hasPrefix("/") && isFocused.wrappedValue && !isMenuDismissed && !currentSuggestions.isEmpty
+    }
+
+    private var suggestionHeaderTitle: String {
+        guard text.contains(" ") else { return "Commands" }
+        let cmd = (text.components(separatedBy: " ").first?.dropFirst() ?? "").lowercased()
+        switch cmd {
+        case "playbooks": return "Playbooks"
+        case "compress", "compression": return "Compression Levels"
+        case "think": return "Thinking Presets"
+        case "model": return "Available Models"
+        case "dir": return "Directories"
+        default: return "Options"
+        }
     }
 
     var body: some View {
         VStack(spacing: 8) {
-            // Floating Slash Command Autocomplete Card
-            if isSlashCommandActive && !matchingCommands.isEmpty {
+            // Floating Slash Command & Argument Autocomplete Card
+            if isSlashCommandActive {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: "command")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.accentColor)
-                        Text("Commands")
+                        Text(suggestionHeaderTitle)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.secondary)
                         Spacer()
@@ -64,14 +78,14 @@ struct PromptInputView: View {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: true) {
                             VStack(spacing: 2) {
-                                ForEach(Array(matchingCommands.enumerated()), id: \.element.id) { index, cmd in
+                                ForEach(Array(currentSuggestions.enumerated()), id: \.element.id) { index, item in
                                     let isSelected = (index == selectedCommandIndex)
                                     Button(action: {
                                         selectedCommandIndex = index
-                                        loadCommandIntoPrompt(cmd)
+                                        selectSuggestion(item)
                                     }) {
                                         HStack(spacing: 10) {
-                                            Image(systemName: cmd.icon)
+                                            Image(systemName: item.icon)
                                                 .font(.system(size: 11, weight: .medium))
                                                 .foregroundColor(isSelected ? .white : .accentColor)
                                                 .frame(width: 22, height: 22)
@@ -80,23 +94,27 @@ struct PromptInputView: View {
 
                                             VStack(alignment: .leading, spacing: 1) {
                                                 HStack(spacing: 6) {
-                                                    Text(cmd.syntax)
+                                                    Text(item.displayText)
                                                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                                         .foregroundColor(.primary)
 
-                                                    Text(cmd.category.rawValue)
-                                                        .font(.system(size: 9, weight: .medium))
-                                                        .padding(.horizontal, 4)
-                                                        .padding(.vertical, 1)
-                                                        .background(isSelected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12))
-                                                        .foregroundColor(isSelected ? .primary : .secondary)
-                                                        .cornerRadius(3)
+                                                    if let badge = item.badge {
+                                                        Text(badge)
+                                                            .font(.system(size: 9, weight: .medium))
+                                                            .padding(.horizontal, 4)
+                                                            .padding(.vertical, 1)
+                                                            .background(isSelected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12))
+                                                            .foregroundColor(isSelected ? .primary : .secondary)
+                                                            .cornerRadius(3)
+                                                    }
                                                 }
 
-                                                Text(cmd.description)
-                                                    .font(.system(size: 11))
-                                                    .foregroundColor(isSelected ? .primary.opacity(0.85) : .secondary)
-                                                    .lineLimit(1)
+                                                if let subtitle = item.subtitle {
+                                                    Text(subtitle)
+                                                        .font(.system(size: 11))
+                                                        .foregroundColor(isSelected ? .primary.opacity(0.85) : .secondary)
+                                                        .lineLimit(1)
+                                                }
                                             }
 
                                             Spacer()
@@ -113,7 +131,7 @@ struct PromptInputView: View {
                                         }
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 6)
-                                        .background(isSelected ? Color.accentColor.opacity(0.15) : (hoveredCommandId == cmd.id ? Color.secondary.opacity(0.08) : Color.clear))
+                                        .background(isSelected ? Color.accentColor.opacity(0.15) : (hoveredCommandId == item.id ? Color.secondary.opacity(0.08) : Color.clear))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                                 .stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1)
@@ -122,14 +140,14 @@ struct PromptInputView: View {
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
-                                    .id(cmd.id)
+                                    .id(item.id)
                                     .onHover { hovering in
                                         if hovering {
-                                            hoveredCommandId = cmd.id
+                                            hoveredCommandId = item.id
                                             if autoScrollSlashMenuOnHover {
                                                 selectedCommandIndex = index
                                             }
-                                        } else if hoveredCommandId == cmd.id {
+                                        } else if hoveredCommandId == item.id {
                                             hoveredCommandId = nil
                                         }
                                     }
@@ -139,9 +157,9 @@ struct PromptInputView: View {
                         }
                         .frame(maxHeight: 210)
                         .onChange(of: selectedCommandIndex) { newIndex in
-                            if newIndex >= 0 && newIndex < matchingCommands.count {
+                            if newIndex >= 0 && newIndex < currentSuggestions.count {
                                 withAnimation(.easeInOut(duration: 0.12)) {
-                                    proxy.scrollTo(matchingCommands[newIndex].id, anchor: .center)
+                                    proxy.scrollTo(currentSuggestions[newIndex].id, anchor: .center)
                                 }
                             }
                         }
@@ -182,23 +200,23 @@ struct PromptInputView: View {
                     .lineLimit(1...6)
                     .focused(isFocused)
                     .onKeyPress(.downArrow) {
-                        if isSlashCommandActive && !matchingCommands.isEmpty {
-                            selectedCommandIndex = (selectedCommandIndex + 1) % matchingCommands.count
+                        if isSlashCommandActive && !currentSuggestions.isEmpty {
+                            selectedCommandIndex = (selectedCommandIndex + 1) % currentSuggestions.count
                             return .handled
                         }
                         return .ignored
                     }
                     .onKeyPress(.upArrow) {
-                        if isSlashCommandActive && !matchingCommands.isEmpty {
-                            selectedCommandIndex = (selectedCommandIndex - 1 + matchingCommands.count) % matchingCommands.count
+                        if isSlashCommandActive && !currentSuggestions.isEmpty {
+                            selectedCommandIndex = (selectedCommandIndex - 1 + currentSuggestions.count) % currentSuggestions.count
                             return .handled
                         }
                         return .ignored
                     }
                     .onKeyPress(.tab) {
-                        if isSlashCommandActive && !matchingCommands.isEmpty {
-                            let safeIndex = min(max(0, selectedCommandIndex), matchingCommands.count - 1)
-                            loadCommandIntoPrompt(matchingCommands[safeIndex])
+                        if isSlashCommandActive && !currentSuggestions.isEmpty {
+                            let safeIndex = min(max(0, selectedCommandIndex), currentSuggestions.count - 1)
+                            selectSuggestion(currentSuggestions[safeIndex])
                             return .handled
                         }
                         return .ignored
@@ -211,16 +229,16 @@ struct PromptInputView: View {
                         return .ignored
                     }
                     .onKeyPress(.return) {
-                        if isSlashCommandActive && !matchingCommands.isEmpty {
-                            let safeIndex = min(max(0, selectedCommandIndex), matchingCommands.count - 1)
-                            let selected = matchingCommands[safeIndex]
-                            if selected.syntax.contains("[") {
-                                loadCommandIntoPrompt(selected)
-                            } else {
-                                text = "/" + selected.name
-                                lastLoadedCommand = "/" + selected.name
+                        if isSlashCommandActive && !currentSuggestions.isEmpty {
+                            let safeIndex = min(max(0, selectedCommandIndex), currentSuggestions.count - 1)
+                            let selected = currentSuggestions[safeIndex]
+                            if selected.isExecutable && !selected.completionText.hasSuffix(" ") {
+                                text = selected.completionText
+                                lastLoadedCommand = selected.completionText
                                 isMenuDismissed = true
                                 onSend()
+                            } else {
+                                selectSuggestion(selected)
                             }
                             return .handled
                         }
@@ -230,16 +248,16 @@ struct PromptInputView: View {
                         if !isGenerating {
                             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                             if !trimmed.isEmpty {
-                                if isSlashCommandActive && !matchingCommands.isEmpty {
-                                    let safeIndex = min(max(0, selectedCommandIndex), matchingCommands.count - 1)
-                                    let selected = matchingCommands[safeIndex]
-                                    if selected.syntax.contains("[") {
-                                        loadCommandIntoPrompt(selected)
-                                    } else {
-                                        text = "/" + selected.name
-                                        lastLoadedCommand = "/" + selected.name
+                                if isSlashCommandActive && !currentSuggestions.isEmpty {
+                                    let safeIndex = min(max(0, selectedCommandIndex), currentSuggestions.count - 1)
+                                    let selected = currentSuggestions[safeIndex]
+                                    if selected.isExecutable && !selected.completionText.hasSuffix(" ") {
+                                        text = selected.completionText
+                                        lastLoadedCommand = selected.completionText
                                         isMenuDismissed = true
                                         onSend()
+                                    } else {
+                                        selectSuggestion(selected)
                                     }
                                 } else {
                                     onSend()
@@ -341,7 +359,7 @@ struct PromptInputView: View {
                 selectedCommandIndex = 0
             }
         }
-        .onChange(of: matchingCommands.count) { count in
+        .onChange(of: currentSuggestions.count) { count in
             if count > 0 {
                 selectedCommandIndex = min(selectedCommandIndex, count - 1)
             } else {
@@ -350,16 +368,16 @@ struct PromptInputView: View {
         }
     }
 
-    private func loadCommandIntoPrompt(_ cmd: SlashCommand) {
-        let newPromptText: String
-        if cmd.syntax.contains("[") {
-            newPromptText = "/" + cmd.name + " "
+    private func selectSuggestion(_ item: CommandSuggestion) {
+        text = item.completionText
+        lastLoadedCommand = item.completionText
+        if item.completionText.hasSuffix(" ") {
+            // Keep menu active so sub-options/arguments are immediately presented
+            isMenuDismissed = false
+            selectedCommandIndex = 0
         } else {
-            newPromptText = "/" + cmd.name
+            isMenuDismissed = true
         }
-        text = newPromptText
-        lastLoadedCommand = newPromptText
-        isMenuDismissed = true
         if !isFocused.wrappedValue {
             isFocused.wrappedValue = true
         }

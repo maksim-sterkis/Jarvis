@@ -144,6 +144,9 @@ final class ChatViewModel: ObservableObject {
     @Published var turnStartTime: Date? = nil
     @Published var turnActionCount: Int = 0
 
+    // In-App Document Viewer Sheet
+    @Published var activeDocumentViewer: DocumentViewerState? = nil
+
     private var checkTimer: AnyCancellable?
     private var activeGenerationTask: Task<Void, Never>?
 
@@ -767,12 +770,6 @@ final class ChatViewModel: ObservableObject {
         case "compress", "compression":
             compressCurrentConversation(convId: convId, levelArgument: argument)
 
-        case "clear":
-            conversations[convIndex].messages.removeAll()
-            conversations[convIndex].updatedAt = Date()
-            conversations[convIndex].tokenCount = 0
-            ConversationStorageService.shared.saveConversation(conversations[convIndex])
-
         case "think":
             if argument.isEmpty {
                 isThinkingEnabled.toggle()
@@ -853,26 +850,77 @@ final class ChatViewModel: ObservableObject {
             appendSystemNotification("Conversation exported! Formatted Markdown has been copied to your clipboard.", convId: convId)
 
         case "instructions":
-            AgentPromptManager.shared.openInstructionsFile()
-            appendSystemNotification("Opened `instructions.md` in default editor.", convId: convId)
+            showInstructionsDocument(convId: convId)
 
-        case "help":
-            let helpText = """
-            ### Available Slash Commands
-
-            - `/compress [low|med|high]` or `/compression` : Condense previous messages into an AI memory snapshot (defaults to med; keeps full visual chat history).
-            - `/clear` : Clear all messages in current chat.
-            - `/think [low|med|high|max|off]` : Set or toggle reasoning budget.
-            - `/dir [path]` : Change active working directory for tools.
-            - `/model [name]` : Switch model or view available models.
-            - `/export` : Copy entire conversation to clipboard as Markdown.
-            - `/instructions` : Open `~/.jarvis/instructions.md`.
-            - `/help` : View this command guide.
-            """
-            appendSystemNotification(helpText, convId: convId)
+        case "playbooks":
+            showPlaybooksDocument(playbookQuery: argument, convId: convId)
 
         default:
-            appendSystemNotification("Unknown command `/\(command)`. Type `/help` for available commands.", convId: convId)
+            appendSystemNotification("Unknown command `/\(command)`. Type `/` in the prompt box to view available commands.", convId: convId)
+        }
+    }
+
+    /// Opens ~/.jarvis/instructions.md in the native in-app rendered markdown viewer
+    func showInstructionsDocument(convId: UUID? = nil) {
+        let customDir = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".jarvis")
+        let customFile = customDir.appendingPathComponent("instructions.md")
+
+        if !FileManager.default.fileExists(atPath: customFile.path) {
+            try? FileManager.default.createDirectory(at: customDir, withIntermediateDirectories: true)
+            let defaultContent = AgentPromptManager.shared.loadInstructionsContent()
+            try? defaultContent.write(to: customFile, atomically: true, encoding: .utf8)
+        }
+
+        let content = AgentPromptManager.shared.loadInstructionsContent()
+        activeDocumentViewer = DocumentViewerState(
+            title: "instructions.md",
+            filePath: "~/.jarvis/instructions.md",
+            content: content,
+            isPlaybookCollection: false,
+            selectedPlaybookId: nil,
+            playbooksList: []
+        )
+        if let id = convId {
+            appendSystemNotification("Opened `instructions.md` in the Jarvis in-app document viewer.", convId: id)
+        }
+    }
+
+    /// Opens playbooks in the native in-app rendered markdown viewer
+    func showPlaybooksDocument(playbookQuery: String = "", convId: UUID? = nil) {
+        PlaybookService.shared.ensurePlaybooksExist()
+        let playbooks = PlaybookService.shared.listPlaybooks()
+
+        let cleanQuery = playbookQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanQuery.isEmpty, let match = PlaybookService.shared.findPlaybook(matching: cleanQuery) {
+            activeDocumentViewer = DocumentViewerState(
+                title: "Playbook: \(match.info.title)",
+                filePath: match.info.path,
+                content: match.content,
+                isPlaybookCollection: true,
+                selectedPlaybookId: match.info.id,
+                playbooksList: playbooks
+            )
+            if let id = convId {
+                appendSystemNotification("Opened `\(match.info.id)` in the Jarvis in-app document viewer.", convId: id)
+            }
+        } else {
+            let firstContent: String
+            if let first = playbooks.first, let c = PlaybookService.shared.loadPlaybookContent(info: first) {
+                firstContent = c
+            } else {
+                firstContent = "# Playbooks\n\nBrowse specialized playbooks using the tabs above."
+            }
+            activeDocumentViewer = DocumentViewerState(
+                title: "Playbooks Collection",
+                filePath: "~/.jarvis/playbooks",
+                content: firstContent,
+                isPlaybookCollection: true,
+                selectedPlaybookId: playbooks.first?.id,
+                playbooksList: playbooks
+            )
+            if let id = convId {
+                appendSystemNotification("Opened `~/.jarvis/playbooks/` in the Jarvis in-app document viewer.", convId: id)
+            }
         }
     }
 

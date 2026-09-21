@@ -25,13 +25,15 @@
 5. [Core Capabilities](#core-capabilities)
    - [Local & Private Inference Engine](#1-local--private-inference-engine)
    - [Autonomous Multi-Turn Agentic Workflows](#2-autonomous-multi-turn-agentic-workflows)
-   - [Transparent Reasoning & Thought Tracing](#3-transparent-reasoning--thought-tracing)
+   - [Transparent Reasoning, Thought Tracing & 120 FPS Popover](#3-transparent-reasoning-thought-tracing--120-fps-popover)
    - [Persistent Working Memory & Anti-Hallucination](#4-persistent-working-memory--anti-hallucination)
    - [Granular 3-Tier Security Policy](#5-granular-3-tier-security-policy)
    - [Context Management & Automatic Compression](#6-context-management--automatic-compression)
-   - [Slash Command Palette](#7-slash-command-palette)
+   - [Slash Command Palette & Dynamic Argument Autocomplete](#7-slash-command-palette--dynamic-argument-autocomplete)
    - [Active Workspace & Path Management](#8-active-workspace--path-management)
-   - [Native macOS Integration & Theming](#9-native-macos-integration--theming)
+   - [Native In-App Rendered Markdown Document Viewer](#9-native-in-app-rendered-markdown-document-viewer)
+   - [Specialized Playbooks & Domain Knowledge Engine](#10-specialized-playbooks--domain-knowledge-engine)
+   - [Native macOS Integration & Theming](#11-native-macos-integration--theming)
 6. [Tool Ecosystem Reference](#tool-ecosystem-reference)
 7. [Slash Commands Reference](#slash-commands-reference)
 8. [Codebase Architecture & File Tree](#codebase-architecture--file-tree)
@@ -206,7 +208,7 @@ flowchart TD
 - **Step Safeguard**: Built-in 15-step execution cap per user prompt protects against runaway loops while giving the model ample headroom for large refactors.
 - **Instant Stop Generation**: Users can click "Stop" at any millisecond during reasoning, tool execution, or output streaming to safely halt background subprocesses and retain all work produced up to that moment.
 
-### 3. Transparent Reasoning & Thought Tracing
+### 3. Transparent Reasoning, Thought Tracing & 120 FPS Popover
 - **Separated Thinking Stream**: Intercepts reasoning tokens and formats them into sleek, collapsible thought pills.
 - **Reasoning Telemetry**: Displays token counts and elapsed seconds for reasoning phases.
 - **Copy Thoughts**: A dedicated one-click clipboard action copies the entire deliberation chain, active checklists, and intermediate tool call summaries as clean Markdown.
@@ -214,6 +216,11 @@ flowchart TD
   - Real-time status badges (`pending_approval`, `running`, `completed`, `failed`, `rejected`).
   - Collapsible argument inspection and syntax-highlighted stdout/stderr terminal viewer.
   - One-click approval options: **Approve Once**, **Always Allow**, or **Deny**.
+- **Hardware-Accelerated 120 FPS Thinking Dropdown**:
+  - Smooth, ProMotion-optimized floating overlay panel anchored via `ThinkingButtonFramePreferenceKey` to the header toolbar.
+  - Zero layout jumping or content displacement when toggling the popover.
+  - Interactive continuous token budget slider (256 to 6,144 tokens) with real-time feedback.
+  - Quick presets: **Low (1,024)**, **Med (2,048)**, **High (4,096)**, **Max (8,192)**, and **Off**.
 
 ### 4. Persistent Working Memory & Anti-Hallucination
 - **Plan Lock-In Protocol**: When Jarvis plans a multi-file task, it locks its target file list inside an explicit `<working_memory>` anchor.
@@ -228,17 +235,40 @@ flowchart TD
 
 ### 6. Context Management & Automatic Compression
 - **Live Token Gauge**: Header and sidebar meters track active context tokens against the model's physical window (e.g. 131,072 tokens for Gemma 4).
-- **Compression Boundaries**: When conversations grow large, Jarvis establishes non-destructive compression boundaries. Earlier turns are compressed into a compact memory snapshot anchor while preserving the full visual history in the UI.
+- **Compression Boundaries**: When conversations grow large, Jarvis establishes non-destructive compression boundaries. Earlier turns are compressed into a compact memory snapshot anchor (`CompressionBoundaryView.swift`) while preserving the full visual history in the UI. Supports manual triggering via `/compress [low|med|high]`.
 
-### 7. Slash Command Palette
-- Type `/` in the prompt input to summon an interactive command palette with category chips, fuzzy filtering, keyboard arrow navigation, and `Tab` auto-completion.
+### 7. Slash Command Palette & Dynamic Argument Autocomplete
+- **Interactive Command Palette**: Type `/` in the prompt input to summon an interactive command palette with category chips (`Context`, `Model`, `Tools`, `Session`), fuzzy filtering, and keyboard navigation.
+- **Dynamic Argument Autocomplete**: Real-time argument condensation when typing commands:
+  - `/playbooks `: Dynamically filters and displays all available playbooks with badges and descriptions.
+  - `/compress `: Condenses options to `low`, `med`, and `high` compression profiles.
+  - `/think `: Offers quick presets (`low`, `med`, `high`, `max`, `off`) or custom token budgets.
+  - `/model `: Displays both currently loaded and disk-available local models.
+  - `/dir `: Autocompletes `~` or folder selection.
+- **Keyboard-First Workflow**: Use `Up` / `Down` arrow keys to navigate suggestions and press `Tab` or `Enter` to auto-insert the command or argument.
 
 ### 8. Active Workspace & Path Management
 - **Interactive Directory Picker**: Set the active working directory via the header button or `/dir` command.
 - **Relative Path Resolution**: All file tools and shell commands execute relative to the selected project folder.
 - **Context Injection**: Jarvis's dynamic system prompt automatically injects the current working directory path so the model never has to guess where project files reside.
 
-### 9. Native macOS Integration & Theming
+### 9. Native In-App Rendered Markdown Document Viewer
+- **Modal Sheet Presentation**: View instructions and playbooks directly within Jarvis via a native macOS sheet (`MarkdownDocumentViewerSheet.swift`) without having to switch to an external text editor.
+- **Full GitHub-Flavored Markdown**: Powered by `MarkdownMessageView.swift`, rendering H1–H6 header hierarchy, syntax-styled code blocks with one-click copy buttons, tables, bold/italic formatting, and path pills.
+- **Document Reading Metrics**: Displays live word count, token estimation (`~words × 1.33`), and file path badges.
+- **Interactive Playbook Tab Bar**: Effortlessly switch between all discovered playbooks in the collection with a single click.
+- **External Editor Fallback**: Includes a dedicated "Open in Editor" button to launch the raw `.md` file in VS Code or your default system editor.
+
+### 10. Specialized Playbooks & Domain Knowledge Engine
+- **Autonomous Playbook Discovery**: Powered by `PlaybookService.swift`, which automatically discovers, validates, and provisions 4 authoritative domain guides into `~/.jarvis/playbooks/`:
+  - `coding_and_testing.md`: Complete guide for scaffolding code, writing unit tests, configuring test runners, and diagnosing `Errno 2`.
+  - `filesystem_and_paths.md`: Authoritative rules on macOS path resolution, `~` expansion, and atomic file creation.
+  - `terminal_execution.md`: Non-interactive command best practices, working directory switching, and exit-code validation.
+  - `codebase_auditing.md`: Multi-file batch inspection and architectural synthesis.
+- **On-Demand Context Loading**: The model can pull any playbook via `read_file(path: "~/.jarvis/playbooks/<name>.md")` whenever it needs deep domain guidance.
+- **User Extensible**: Drop your own `.md` playbooks into `~/.jarvis/playbooks/` anytime to teach Jarvis team coding standards, custom APIs, or proprietary workflows; they are immediately available in the `/playbooks` autocomplete list and loaded by the agent on-demand.
+
+### 11. Native macOS Integration & Theming
 - **Appearance Modes**: Built-in Dark, Light, and System themes that immediately synchronize with macOS system appearance.
 - **Optional Menu Bar Extra**: Keep Jarvis tucked in the top-right macOS menu bar for rapid access or quick quitting.
 - **100% Native**: Zero Electron, zero webviews, zero bloated runtimes. Built purely in Swift, SwiftUI, and AppKit for instant launch times and minimal battery consumption.
@@ -266,16 +296,21 @@ Quickly trigger commands anywhere in the chat prompt using `/`:
 
 | Command | Syntax | Category | Description |
 | :--- | :--- | :--- | :--- |
-| `/compress` | `/compress [low\|med\|high]` | `Context` | Condenses conversation history into a memory snapshot anchor (preserves UI messages). |
-| `/compression`| `/compression [low\|med\|high]`| `Context` | Alias for `/compress`. |
-| `/think` | `/think [low\|med\|high\|max\|off]` | `Model` | Sets the reasoning token budget (e.g. `/think low` = 1024, `/think max` = 16384, `/think 2048`). |
-| `/model` | `/model [name]` | `Model` | Switches active model, boots LM Studio if offline, and loads weights into memory. |
-| `/dir` | `/dir [path]` | `Tools` | Sets the active project working directory, or opens native macOS folder picker if no path given. |
-| `/clear` | `/clear` | `Session` | Clears all messages in the current conversation. |
-| `/new` | `/new` | `Session` | Opens a new blank chat session. |
+| `/compress` | `/compress [low\|med\|high]` | `Context` | Condenses conversation history into a memory snapshot anchor (preserves visual UI messages). Supports `Tab` argument auto-completion for `low`, `med`, `high`. (Alias: `/compression`) |
+| `/think` | `/think [low\|med\|high\|max\|off]` | `Model` | Sets reasoning token budget, custom token number (e.g. `2048`), or toggles thinking off. Supports `Tab` autocomplete for presets. |
+| `/model` | `/model [name]` | `Model` | Switches active model, boots LM Studio if offline, and loads weights into memory. Autocompletes loaded and local models with `Tab`. |
+| `/dir` | `/dir [path]` | `Tools` | Sets the active project working directory (supports `~`), or opens native macOS folder picker if no path given. |
+| `/playbooks` | `/playbooks [name]` | `Tools` | Opens the native in-app rendered markdown viewer with tabbed browsing across all playbooks, or opens a specific playbook directly. Supports `Tab` autocomplete for playbook names. |
+| `/instructions`| `/instructions` | `Tools` | Opens `~/.jarvis/instructions.md` in the native in-app rendered markdown viewer (with one-click external editor fallback). |
 | `/export` | `/export` | `Session` | Formats and copies the complete conversation history as clean Markdown to the clipboard. |
-| `/instructions`| `/instructions` | `Tools` | Opens the local `~/.jarvis/instructions.md` configuration file in your default editor. |
-| `/help` | `/help` | `Help` | Displays an interactive reference guide of all available commands and tool usage. |
+
+### Helpful Shortcuts
+
+- `Tab`: Auto-complete selected slash command or subcommand argument
+- `Up` / `Down`: Navigate suggestions in the slash command overlay
+- `Esc`: Dismiss slash command suggestions overlay
+- `Cmd + N`: Start a new blank chat session
+- `Cmd + ,`: Open Jarvis Settings
 
 ---
 
@@ -284,23 +319,33 @@ Quickly trigger commands anywhere in the chat prompt using `/`:
 ```
 Jarvis/
 ├── JarvisApp.swift                        # App entry point, AppDelegate lifecycle, menu commands, instant termination
-├── ContentView.swift                      # Primary UI scaffold: header toolbar, token gauge, message list, turn grouping
-├── ChatViewModel.swift                    # Central observable state: autonomous loop, SSE handling, timer controls
+├── ContentView.swift                      # Primary UI scaffold: header toolbar, token gauge, message list, anchored 120 FPS thinking overlay
+├── ChatViewModel.swift                    # Central observable state: autonomous loop, SSE handling, timer controls, slash command execution
 ├── LMStudioClient.swift                   # Async HTTP & SSE client for LM Studio /v1/chat/completions & /api/v0/models
 ├── LMStudioService.swift                  # CLI / daemon lifecycle, process discovery, unified memory offloading, SIGKILL
 ├── AgentPromptManager.swift               # Dynamic system prompt composer with tool schemas and working dir injection
 ├── AgentInstructions.md                   # Behavioral guidelines: plan lock-in, working memory format, anti-hallucination
+├── PlaybookService.swift                  # Playbooks discovery, automatic seeding into ~/.jarvis/playbooks/, validation, and loading
 ├── ToolRegistry.swift                     # OpenAI tool definition schemas, execution dispatcher, argument parser
 ├── ToolExecutionCardView.swift            # Interactive approval card UI with stdout/stderr viewers and whitelist buttons
 ├── PreResponseExecutionContainerView.swift # Collapsible thought pills, reasoning timers, and "Copy Thoughts" exporter
-├── PromptInputView.swift                  # Dynamic prompt text editor, slash command overlay palette, shortcut handler
-├── SlashCommandService.swift              # Slash command registry, fuzzy search, categories, and parameter parser
+├── PromptInputView.swift                  # Dynamic prompt text editor, slash command overlay palette with argument autocomplete
+├── SlashCommandService.swift              # Slash command registry, argument autocomplete engine (playbooks, levels, presets, models)
+├── MarkdownDocumentViewerSheet.swift      # Native in-app rendered markdown viewer sheet for playbooks and instructions
+├── MarkdownMessageView.swift              # Custom Swift markdown parser rendering H1–H6, syntax code blocks, and markdown tables
+├── CompressionBoundaryView.swift          # Visual divider and collapsible memory snapshot card indicating context compaction
+├── JarvisLogoView.swift                   # Native SwiftUI vector logo with animated pulsing glow and status indicator
 ├── SettingsView.swift                     # macOS Settings panel: themes, security modes, whitelists, launch configurations
 ├── AppSettings.swift                      # Persistent settings (UserDefaults), security rules, command safety heuristics
 ├── FileSystemService.swift                # Disk I/O, path sanitization, batch reading with concurrency limits
 ├── ShellCommandService.swift              # /bin/zsh process execution, 30s timeout safety guard, syntax analysis
 ├── ConversationStorageService.swift       # JSON conversation persistence in ~/Library/Application Support/Jarvis
-└── SidebarView.swift                      # Collapsible conversation history drawer with search, rename, and deletion
+├── SidebarView.swift                      # Collapsible conversation history drawer with search, rename, and deletion
+└── Playbooks/                             # Bundled authoritative markdown playbooks (seeded to ~/.jarvis/playbooks/)
+    ├── coding_and_testing.md              # Scaffolding, test writing, working directory rules, Errno 2 diagnostics
+    ├── filesystem_and_paths.md            # macOS path resolution, tilde expansion, atomic file creation
+    ├── terminal_execution.md              # Non-interactive shell commands, exit-code validation, directory switching
+    └── codebase_auditing.md               # Multi-file batch inspection and architectural synthesis
 ```
 
 ---

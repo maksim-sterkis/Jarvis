@@ -73,8 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { notification in
             guard let window = notification.object as? NSWindow, window.canBecomeMain else { return }
 
-            // Never terminate when the user closes the Settings window or auxiliary panels
-            if isSettingsWindow(window) || window is NSPanel {
+            // Never terminate when the user closes the Settings window, modal sheets, or auxiliary panels
+            if isSettingsWindow(window) || window is NSPanel || window.isSheet || window.sheetParent != nil {
                 return
             }
 
@@ -84,6 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 other.isVisible &&
                 !isSettingsWindow(other) &&
                 !(other is NSPanel) &&
+                !other.isSheet &&
+                other.sheetParent == nil &&
                 other.canBecomeMain
             }
 

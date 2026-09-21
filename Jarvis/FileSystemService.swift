@@ -21,10 +21,7 @@ final class FileSystemService {
     func resolvePath(_ path: String, baseDirectory: String? = nil) -> String {
         let expanded = (path as NSString).expandingTildeInPath
         if expanded.hasPrefix("/") {
-            let standard = (expanded as NSString).standardizingPath
-            if FileManager.default.fileExists(atPath: standard) {
-                return standard
-            }
+            return (expanded as NSString).standardizingPath
         }
 
         let base: String
